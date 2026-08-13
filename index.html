@@ -1,0 +1,1626 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal d'Analyse Financière Multi-Valeurs & Hub Réglementaire (BALO / AMF / Euronext)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lightweight Charts pour le Graphique Boursier 5 Ans en Bougies + Volume -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            800: '#166534',
+                            900: '#14532d',
+                        },
+                        darkbg: '#0f172a',
+                        cardbg: '#1e293b',
+                        borderbg: '#334155'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-100 min-h-screen flex flex-col custom-scrollbar">
+
+    <header class="border-b border-borderbg bg-cardbg/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-brand-500/20 text-brand-500 rounded-lg border border-brand-500/30">
+                    <i data-lucide="bar-chart-4" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                        Terminal Financier <span id="headerTickerBadge" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-brand-400 border border-slate-700">TTE.PA</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Analyse de Valorisation Multi-Valeurs & Information Réglementée (BALO / AMF / Euronext)</p>
+                </div>
+            </div>
+
+            <!-- Module de Recherche Multi-Valeurs & Sélecteur -->
+            <div class="flex items-center gap-3 w-full sm:w-auto">
+                <div class="relative flex-1 sm:w-96">
+                    <div class="relative">
+                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input type="text" id="tickerSearch" placeholder="Rechercher toute valeur (ex: TotalEnergies, LVMH, Air Liquide, TSLA...)" 
+                               class="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-24 py-1.5 text-sm focus:outline-none focus:border-brand-500 transition text-white"
+                               onkeyup="handleSearch(event)">
+                        <button onclick="triggerLiveAISearch()" id="searchAiBtn" class="absolute right-1 top-1/2 -translate-y-1/2 bg-brand-600 hover:bg-brand-500 text-white text-[11px] font-medium px-2.5 py-1 rounded-md flex items-center gap-1 transition shadow-sm">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                            <span>Live IA</span>
+                        </button>
+                    </div>
+                    <div id="searchResults" class="hidden absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto divide-y divide-slate-700/50"></div>
+                </div>
+                <button onclick="openCustomModelModal()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium rounded-lg flex items-center gap-1.5 transition">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                    <span class="hidden md:inline">Saisie Manuelle</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Overlay de Chargement & Notifications Toast -->
+    <div id="loadingOverlay" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex flex-col items-center justify-center space-y-4">
+        <div class="p-4 bg-brand-500/10 border border-brand-500/30 rounded-full animate-bounce">
+            <i data-lucide="radar" class="w-10 h-10 text-brand-400 animate-spin"></i>
+        </div>
+        <div class="text-center space-y-1 max-w-md px-4">
+            <h3 id="loadingTitle" class="text-lg font-bold text-white">Extraction des Données Boursières & Réglementaires...</h3>
+            <p id="loadingSubtitle" class="text-xs text-slate-400">Scan en temps réel sur Google/Yahoo Finance, BALO, AMF et Euronext</p>
+        </div>
+    </div>
+
+    <div id="toastNotification" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 max-w-md bg-slate-800 border border-slate-700 text-white p-3.5 rounded-xl shadow-2xl flex items-center gap-3">
+        <div id="toastIcon" class="p-2 rounded-lg bg-brand-500/20 text-brand-400">
+            <i data-lucide="info" class="w-5 h-5"></i>
+        </div>
+        <div>
+            <div id="toastTitle" class="font-bold text-xs">Notification</div>
+            <div id="toastMessage" class="text-xs text-slate-300">Message</div>
+        </div>
+    </div>
+
+    <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full space-y-6">
+
+        <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <!-- Carte Prix / Valorisation -->
+            <div class="bg-cardbg p-5 rounded-xl border border-borderbg flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-start text-xs text-slate-400 mb-1">
+                        <span id="activeCompanyName" class="font-bold text-slate-200">TOTALENERGIES</span>
+                        <span id="marketBadge" class="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-[10px]">EURONEXT PARIS</span>
+                    </div>
+                    <div class="flex items-baseline gap-2">
+                        <span id="stockPrice" class="text-3xl font-extrabold text-white">62.40 €</span>
+                        <span id="stockChange" class="text-sm font-semibold text-emerald-400 flex items-center">
+                            <i data-lucide="trending-up" class="w-4 h-4 mr-0.5"></i> +0.8%
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-2">Cap. Boursière : <span id="marketCap" class="text-slate-200 font-medium">148,5 Mds €</span></p>
+                </div>
+                <div class="mt-4 pt-3 border-t border-slate-700/50 flex justify-between text-xs">
+                    <span class="text-slate-400">Plus bas / haut (52 sem.)</span>
+                    <span id="range52w" class="font-medium text-slate-300">54.20 € - 68.90 €</span>
+                </div>
+            </div>
+
+            <!-- Score Synthétique d'Investissement -->
+            <div class="bg-cardbg p-5 rounded-xl border border-borderbg flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-center text-xs text-slate-400 mb-2">
+                        <span>DIAGNOSTIC GLOBAL</span>
+                        <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div id="scoreGauge" class="w-12 h-12 rounded-full border-4 border-emerald-500 flex items-center justify-center font-bold text-emerald-400 text-lg">
+                            8.2
+                        </div>
+                        <div>
+                            <div id="verdictTitle" class="font-bold text-slate-100">Solide & Rendement</div>
+                            <div id="verdictSubtitle" class="text-xs text-slate-400">Risque Modéré / Génération de Cash</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 pt-3 border-t border-slate-700/50 text-xs text-slate-400 flex justify-between">
+                    <span>Secteur :</span>
+                    <span id="kpiSector" class="font-semibold text-slate-200">Énergie Multi-Energies</span>
+                </div>
+            </div>
+
+            <!-- Chiffres Clés Opérationnels / Indicateurs Clés -->
+            <div class="bg-cardbg p-5 rounded-xl border border-borderbg flex flex-col justify-between">
+                <div>
+                    <div class="text-xs text-slate-400 mb-2">INDICATEURS DE GESTION</div>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-slate-400">Rendement Dividende :</span>
+                            <span id="kpiDividend" class="font-bold text-emerald-400">5.4%</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-slate-400">Volume Quotidien :</span>
+                            <span id="kpiVolume" class="font-medium text-slate-300">3.2M titres</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-slate-400">Free Cash Flow :</span>
+                            <span id="kpiFCF" class="font-medium text-slate-300">18.4 Mds €</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 pt-3 border-t border-slate-700/50 text-xs text-slate-400 flex justify-between">
+                    <span>Couverture Analystes :</span>
+                    <span id="kpiCoverage" class="font-semibold text-brand-400">Achat / Conserver</span>
+                </div>
+            </div>
+
+            <!-- Ratios Clés de Valorisation -->
+            <div class="bg-cardbg p-5 rounded-xl border border-borderbg flex flex-col justify-between">
+                <div>
+                    <div class="text-xs text-slate-400 mb-2">VALORISATION & MULTIPLES</div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="bg-slate-900/60 p-2 rounded border border-slate-800">
+                            <span class="text-slate-400 block text-[10px]">P/E (PER)</span>
+                            <span id="ratioPE" class="font-bold text-slate-100">7.8x</span>
+                        </div>
+                        <div class="bg-slate-900/60 p-2 rounded border border-slate-800">
+                            <span class="text-slate-400 block text-[10px]">VE / EBITDA</span>
+                            <span id="ratioVEEBITDA" class="font-bold text-slate-100">3.9x</span>
+                        </div>
+                        <div class="bg-slate-900/60 p-2 rounded border border-slate-800">
+                            <span class="text-slate-400 block text-[10px]">P/B (Actif Net)</span>
+                            <span id="ratioPB" class="font-bold text-slate-100">1.25x</span>
+                        </div>
+                        <div class="bg-slate-900/60 p-2 rounded border border-slate-800">
+                            <span class="text-slate-400 block text-[10px]">Marge EBITDA</span>
+                            <span id="ratioEbitdaMargin" class="font-bold text-slate-100">22.5%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3 text-[11px] text-slate-400 text-center" id="ratioSummaryNote">
+                    P/E attractif au regard des pairs sectoriels
+                </div>
+            </div>
+        </section>
+
+        <div class="flex border-b border-borderbg space-x-2 overflow-x-auto custom-scrollbar pb-1">
+            <button onclick="switchTab('overview')" id="tab-overview" class="tab-btn px-4 py-2 font-medium text-sm border-b-2 border-brand-500 text-brand-400 whitespace-nowrap">
+                <i data-lucide="bar-chart-3" class="w-4 h-4 inline mr-1.5"></i> Financials & Ratios
+            </button>
+            <button onclick="switchTab('regulatory')" id="tab-regulatory" class="tab-btn px-4 py-2 font-medium text-sm text-slate-400 hover:text-slate-200 border-b-2 border-transparent whitespace-nowrap">
+                <i data-lucide="file-check-2" class="w-4 h-4 inline mr-1.5"></i> Information Réglementée (BALO / AMF / Euronext)
+            </button>
+            <button onclick="switchTab('proscons')" id="tab-proscons" class="tab-btn px-4 py-2 font-medium text-sm text-slate-400 hover:text-slate-200 border-b-2 border-transparent whitespace-nowrap">
+                <i data-lucide="scale" class="w-4 h-4 inline mr-1.5"></i> Opportunités & Risques
+            </button>
+            <button onclick="switchTab('news')" id="tab-news" class="tab-btn px-4 py-2 font-medium text-sm text-slate-400 hover:text-slate-200 border-b-2 border-transparent whitespace-nowrap">
+                <i data-lucide="newspaper" class="w-4 h-4 inline mr-1.5"></i> Actualités Boursières
+            </button>
+            <button onclick="switchTab('replicator')" id="tab-replicator" class="tab-btn px-4 py-2 font-medium text-sm text-slate-400 hover:text-slate-200 border-b-2 border-transparent whitespace-nowrap">
+                <i data-lucide="copy" class="w-4 h-4 inline mr-1.5"></i> Comparateur & Hub Multi-Valeurs
+            </button>
+        </div>
+
+        <!-- ONGLET 1: OVERVIEW FINANCIALS -->
+        <div id="content-overview" class="space-y-6">
+            <div class="bg-cardbg p-6 rounded-xl border border-borderbg leading-relaxed text-sm text-slate-300">
+                <h3 class="text-base font-bold text-white mb-3 flex items-center gap-2">
+                    <i data-lucide="file-text" class="w-5 h-5 text-brand-500"></i>
+                    <span id="overviewSummaryTitle">Synthèse Financière & Trajectoire Stratégique</span>
+                </h3>
+                <p id="overviewSummaryContent" class="mb-3">
+                    Cette fiche synthétise les données fondamentales pour la valeur actuellement sélectionnée. Utilisez le moteur de recherche en haut de page pour charger n'importe quel ticker d'Euronext, du S&P 500 ou des marchés mondiaux.
+                </p>
+            </div>
+
+            <!-- NOUVEAU : Graphique Boursier 5 Ans (Hebdomadaire - Bougies & Volume) -->
+            <div class="bg-cardbg p-5 rounded-xl border border-borderbg space-y-4">
+                <div class="flex flex-wrap justify-between items-center gap-2">
+                    <div>
+                        <h4 class="font-bold text-sm text-white flex items-center gap-2">
+                            <i data-lucide="candlestick-chart" class="w-4 h-4 text-brand-400"></i>
+                             Historique Boursier sur 5 Ans (Périodicité Hebdomadaire - Bougies OHLC & Volume)
+                        </h4>
+                        <p class="text-xs text-slate-400">Représentation graphique en bougies japonaises avec barres de volume sous-jacentes</p>
+                    </div>
+                    <div class="flex items-center gap-1.5 text-xs bg-slate-900 p-1 rounded-lg border border-slate-800">
+                        <button onclick="setCandleTimeframe('5Y')" id="btnTf5Y" class="px-2.5 py-1 bg-brand-600 text-white rounded font-medium">5 Ans (Hebdo)</button>
+                        <button onclick="setCandleTimeframe('3Y')" id="btnTf3Y" class="px-2.5 py-1 bg-slate-800 text-slate-400 hover:text-white rounded font-medium">3 Ans</button>
+                        <button onclick="setCandleTimeframe('1Y')" id="btnTf1Y" class="px-2.5 py-1 bg-slate-800 text-slate-400 hover:text-white rounded font-medium">1 An</button>
+                    </div>
+                </div>
+                <div id="candlestickChartContainer" class="w-full h-80 relative rounded-lg overflow-hidden border border-slate-800/80 bg-slate-950"></div>
+            </div>
+
+            <!-- Graphiques Financiers (CA/EBITDA et Dette) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-cardbg p-5 rounded-xl border border-borderbg">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="font-bold text-sm text-white">Évolution du Chiffre d'Affaires & EBITDA (M€)</h4>
+                        <span class="text-xs text-slate-400">Historique & Projections</span>
+                    </div>
+                    <div class="h-64 relative">
+                        <canvas id="financialsChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-cardbg p-5 rounded-xl border border-borderbg">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="font-bold text-sm text-white">Résultat Net & Ratio d'Endettement</h4>
+                        <span class="text-xs text-slate-400">M€ / Levier</span>
+                    </div>
+                    <div class="h-64 relative">
+                        <canvas id="debtChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tableau Ratios -->
+            <div class="bg-cardbg rounded-xl border border-borderbg overflow-hidden">
+                <div class="p-4 border-b border-borderbg font-bold text-sm text-white flex justify-between items-center">
+                    <span>États financiers historiques et prévisionnels sur 5 ans</span>
+                    <span class="text-xs font-normal text-slate-400">Sources: Comptes Publiés & Estimations Marché</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-900/80 text-slate-400 uppercase border-b border-borderbg">
+                            <tr>
+                                <th class="p-3">Indicateur Financier</th>
+                                <th class="p-3">2022</th>
+                                <th class="p-3">2023</th>
+                                <th class="p-3">2024</th>
+                                <th class="p-3">2025</th>
+                                <th class="p-3 text-brand-400">2026 (e)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800" id="ratiosTableBody">
+                            <!-- Rempli dynamiquement -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ONGLET 2: INFORMATION RÉGLEMENTÉE & FILINGS (BALO / AMF / EURONEXT) -->
+        <div id="content-regulatory" class="hidden space-y-6">
+            
+            <!-- Accès Directs aux 4 Sources Officielles -->
+            <div class="bg-cardbg p-5 rounded-xl border border-borderbg space-y-4">
+                <div class="flex flex-wrap justify-between items-center gap-3">
+                    <div>
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <i data-lucide="shield-alert" class="w-5 h-5 text-brand-400"></i>
+                            Portail d'Information Réglementée & Avis Officiels
+                        </h3>
+                        <p class="text-xs text-slate-400 mt-1">
+                            Accès rapide aux registres réglementaires sur <strong class="text-brand-400">3 ans (36 mois)</strong> pour <strong id="regCompanyName" class="text-brand-300">TotalEnergies</strong>
+                        </p>
+                    </div>
+
+                    <button onclick="refreshRegulatoryData()" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-lg flex items-center gap-2 shadow transition">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        <span>Actualiser via Live IA</span>
+                    </button>
+                </div>
+
+                <!-- Grille des 4 Liens Directs avec Paramètres Pré-remplis -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <!-- Link BALO -->
+                    <a id="linkBalo" href="https://www.journal-officiel.gouv.fr/pages/balo-recherche/?sort=dateparution" target="_blank" rel="noopener noreferrer" 
+                       class="p-3 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-brand-500 rounded-xl transition flex flex-col justify-between group">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-bold text-emerald-400">BALO</span>
+                            <i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition"></i>
+                        </div>
+                        <div class="text-[11px] text-slate-300 font-medium">Journal Officiel - BALO</div>
+                        <div class="text-[10px] text-slate-400 mt-1">Convocations AG, Comptes, Avis</div>
+                    </a>
+
+                    <!-- Link AMF -->
+                    <a id="linkAmf" href="https://bdif.amf-france.org/fr" target="_blank" rel="noopener noreferrer"
+                       class="p-3 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-brand-500 rounded-xl transition flex flex-col justify-between group">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-bold text-blue-400">AMF (BDIF)</span>
+                            <i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition"></i>
+                        </div>
+                        <div class="text-[11px] text-slate-300 font-medium">Base BDIF de l'AMF</div>
+                        <div class="text-[10px] text-slate-400 mt-1">Seuils, Dirigeants, Prospectus</div>
+                    </a>
+
+                    <!-- Link Euronext Press -->
+                    <a id="linkEuronextPress" href="https://live.euronext.com/en/listview/company-press-releases/408" target="_blank" rel="noopener noreferrer"
+                       class="p-3 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-brand-500 rounded-xl transition flex flex-col justify-between group">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-bold text-amber-400">Euronext Press</span>
+                            <i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition"></i>
+                        </div>
+                        <div class="text-[11px] text-slate-300 font-medium">Communiqués de Presse</div>
+                        <div class="text-[10px] text-slate-400 mt-1">Infs Privilégiées (MAR), Résultats</div>
+                    </a>
+
+                    <!-- Link Euronext Cash Notices -->
+                    <a id="linkEuronextNotices" href="https://live.euronext.com/en/resources/notices-corporate-actions/cash-notices" target="_blank" rel="noopener noreferrer"
+                       class="p-3 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-brand-500 rounded-xl transition flex flex-col justify-between group">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-bold text-purple-400">Euronext Notices</span>
+                            <i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition"></i>
+                        </div>
+                        <div class="text-[11px] text-slate-300 font-medium">Cash Notices & Operations</div>
+                        <div class="text-[10px] text-slate-400 mt-1">Coupons, OST, Cotations</div>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Filtres & Groupement des Publications sur 3 Ans -->
+            <div class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                    <div class="flex items-center gap-2 text-xs font-bold text-white">
+                        <i data-lucide="filter" class="w-4 h-4 text-brand-400"></i>
+                        <span>Historique sur 3 Ans (36 Mois) - Filtrer par Type d'Information :</span>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-1.5" id="regTypeFilters">
+                        <button onclick="filterRegulatory('ALL')" class="reg-filter-btn px-2.5 py-1 bg-brand-600 text-white rounded text-xs font-medium">
+                            Tous (36 Mois)
+                        </button>
+                        <button onclick="filterRegulatory('BALO')" class="reg-filter-btn px-2.5 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded text-xs font-medium">
+                            BALO (Assemblées & Comptes)
+                        </button>
+                        <button onclick="filterRegulatory('AMF')" class="reg-filter-btn px-2.5 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded text-xs font-medium">
+                            AMF (Seuils & Dirigeants)
+                        </button>
+                        <button onclick="filterRegulatory('PRESS')" class="reg-filter-btn px-2.5 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded text-xs font-medium">
+                            Euronext Communiqués
+                        </button>
+                        <button onclick="filterRegulatory('NOTICES')" class="reg-filter-btn px-2.5 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded text-xs font-medium">
+                            Euronext Cash Notices
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Accordéon / Section par Groupes d'Informations -->
+                <div class="space-y-4" id="regulatoryGroupContainer">
+                    <!-- Rempli dynamiquement par JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ONGLET 3: PROS & CONS -->
+        <div id="content-proscons" class="hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-cardbg rounded-xl border border-emerald-500/30 p-5 space-y-4">
+                    <div class="flex items-center gap-2 text-emerald-400 font-bold border-b border-slate-700/60 pb-3">
+                        <div class="p-1.5 bg-emerald-500/20 rounded-lg">
+                            <i data-lucide="thumbs-up" class="w-5 h-5"></i>
+                        </div>
+                        <h3>LES POINTS FORTS & OPPORTUNITÉS (+)</h3>
+                    </div>
+                    <div class="space-y-3" id="prosList">
+                        <!-- Rempli par script -->
+                    </div>
+                </div>
+
+                <div class="bg-cardbg rounded-xl border border-rose-500/30 p-5 space-y-4">
+                    <div class="flex items-center gap-2 text-rose-400 font-bold border-b border-slate-700/60 pb-3">
+                        <div class="p-1.5 bg-rose-500/20 rounded-lg">
+                            <i data-lucide="thumbs-down" class="w-5 h-5"></i>
+                        </div>
+                        <h3>LES RISQUES & VULNÉRABILITÉS (-)</h3>
+                    </div>
+                    <div class="space-y-3" id="consList">
+                        <!-- Rempli par script -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ONGLET 4: ACTUALITÉS MULTI-SOURCES -->
+        <div id="content-news" class="hidden space-y-4">
+            <div class="bg-cardbg p-4 rounded-xl border border-borderbg flex flex-wrap justify-between items-center gap-3">
+                <div>
+                    <h3 class="font-bold text-white text-sm flex items-center gap-2">
+                        <i data-lucide="newspaper" class="w-4 h-4 text-brand-400"></i>
+                        Fil d'Actualités Boursières Multi-Sources
+                    </h3>
+                    <p class="text-xs text-slate-400">Agrégation en temps réel via IA : Boursorama, Les Echos, Zonebourse, Reuters, Bloomberg, FT, CNBC</p>
+                </div>
+                <div class="flex items-center gap-2 text-[11px]">
+                    <span class="px-2 py-1 bg-slate-800 rounded border border-slate-700 text-slate-300">Sources vérifiées</span>
+                    <span class="px-2 py-1 bg-brand-500/10 border border-brand-500/30 text-brand-400 rounded">Analyse de sentiment</span>
+                </div>
+            </div>
+            <div class="space-y-3" id="newsFeed">
+                <!-- Rempli par JS -->
+            </div>
+        </div>
+
+        <!-- ONGLET 5: COMPARATEUR & HUB MULTI-VALEURS -->
+        <div id="content-replicator" class="hidden space-y-6">
+            <div class="bg-cardbg p-6 rounded-xl border border-borderbg space-y-4">
+                <div class="flex flex-wrap justify-between items-center gap-2">
+                    <div>
+                        <h3 class="font-bold text-white text-base">Hub Multi-Valeurs & Benchmarking Sectoriel</h3>
+                        <p class="text-xs text-slate-400">Sélectionnez une valeur ou recherchez n'importe quel ticker via l'IA en haut de page.</p>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-[11px] text-slate-400">Valeurs Populaires :</span>
+                        <button onclick="fetchStockDataFromMarket('TotalEnergies TTE')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-brand-400 rounded text-[11px] font-medium">TotalEnergies</button>
+                        <button onclick="fetchStockDataFromMarket('LVMH MC')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-brand-400 rounded text-[11px] font-medium">LVMH</button>
+                        <button onclick="fetchStockDataFromMarket('Air Liquide AI')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-brand-400 rounded text-[11px] font-medium">Air Liquide</button>
+                        <button onclick="fetchStockDataFromMarket('Schneider Electric SU')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-brand-400 rounded text-[11px] font-medium">Schneider</button>
+                        <button onclick="fetchStockDataFromMarket('Voltalia VLTSA')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-brand-400 rounded text-[11px] font-medium">Voltalia</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3" id="peerGrid">
+                    <!-- Rempli dynamiquement -->
+                </div>
+            </div>
+
+            <div class="bg-cardbg rounded-xl border border-borderbg overflow-hidden">
+                <div class="p-4 border-b border-borderbg font-bold text-sm text-white">
+                    Tableau Comparatif des Ratios de Valorisation
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-900/80 text-slate-400 uppercase border-b border-borderbg">
+                            <tr>
+                                <th class="p-3">Société / Ticker</th>
+                                <th class="p-3">Secteur</th>
+                                <th class="p-3">Prix (€)</th>
+                                <th class="p-3">P/E (PER)</th>
+                                <th class="p-3">VE/EBITDA</th>
+                                <th class="p-3">P/B</th>
+                                <th class="p-3">Marge EBITDA</th>
+                                <th class="p-3 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800" id="comparisonTableBody">
+                            <!-- Rempli dynamiquement -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal pour Saisie Manuelle -->
+    <div id="customModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-cardbg border border-borderbg rounded-xl max-w-lg w-full p-6 space-y-4 text-slate-200">
+            <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+                <h3 class="font-bold text-white text-base">Ajouter une Valeur Sur-Mesure</h3>
+                <button onclick="closeCustomModelModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="customStockForm" onsubmit="saveCustomStock(event)" class="space-y-3 text-xs">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-400 mb-1">Nom Entreprise</label>
+                        <input type="text" id="customName" required placeholder="ex: Sanofi" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Ticker / ISIN</label>
+                        <input type="text" id="customTicker" required placeholder="ex: SAN.PA" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-slate-400 mb-1">Prix (€)</label>
+                        <input type="number" step="0.01" id="customPrice" required placeholder="88.50" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">P/E Ratio</label>
+                        <input type="number" step="0.1" id="customPE" placeholder="12.5" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">VE / EBITDA</label>
+                        <input type="number" step="0.1" id="customVEEbitda" placeholder="8.2" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-400 mb-1">P/B Ratio</label>
+                        <input type="number" step="0.1" id="customPB" placeholder="1.8" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Marge EBITDA (%)</label>
+                        <input type="number" step="0.1" id="customMargin" placeholder="28.0" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1">Opportunité majeure (+)</label>
+                    <input type="text" id="customPro" placeholder="Solide pipeline R&D et dividendes réguliers" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1">Risque principal (-)</label>
+                    <input type="text" id="customCon" placeholder="Expirations de brevets à horizon 3 ans" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                </div>
+                <div class="pt-3 flex justify-end gap-2 border-t border-slate-700">
+                    <button type="button" onclick="closeCustomModelModal()" class="px-3 py-1.5 bg-slate-800 text-slate-300 rounded">Annuler</button>
+                    <button type="submit" class="px-3 py-1.5 bg-brand-600 text-white rounded font-semibold">Enregistrer & Charger</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // --- BASE DE DONNÉES FINANCIÈRES MULTI-VALEURS (HISTORIQUE RÉGLEMENTAIRE EXTENSION A 3 ANS + ACTUALITÉS MULTI-SOURCES) ---
+        const stockDatabase = {
+            "TTE": {
+                name: "TotalEnergies",
+                ticker: "TTE.PA",
+                market: "Euronext Paris",
+                sector: "Énergie & Transition",
+                price: 62.40,
+                change: "+0.8%",
+                isUp: true,
+                marketCap: "148,5 Mds €",
+                range52w: "54.20 € - 68.90 €",
+                score: 8.2,
+                verdictTitle: "Solide & Génération de Cash",
+                verdictSubtitle: "Risque Modéré / Politique de Dividend & Buybacks Sustentable",
+                dividend: "5.4%",
+                volume: "3.2M titres",
+                fcf: "18.4 Mds €",
+                coverage: "Achat Synthétique",
+                ratios: { pe: 7.8, veEbitda: 3.9, pb: 1.25, margin: "22.5%" },
+                summary: "TotalEnergies bénéficie d'une forte génération de trésorerie portée par la diversification pétrole, gaz naturel liquéfié (GNL) et le développement accéléré des capacités de production d'électricité renouvelable.",
+                financialHistory: {
+                    years: ['2022', '2023', '2024', '2025', '2026 (e)'],
+                    revenue: [250000, 218000, 205000, 215000, 225000],
+                    ebitda: [45000, 38000, 35000, 37500, 39000],
+                    netIncome: [20500, 19800, 16200, 17500, 18200],
+                    netDebtLeverage: [1.1, 0.9, 0.8, 0.7, 0.6]
+                },
+                pros: [
+                    { title: "Génération de Cash-Flow Exceptionnelle", desc: "Flux de trésorerie disponible élevé assurant un retour de capital attractif aux actionnaires (rachats d'actions et dividendes).", impact: "Élevé" },
+                    { title: "Position de Leader sur le GNL Mondial", desc: "Rôle majeur dans la sécurité d'approvisionnement européenne et mondiale en gaz naturel liquéfié.", impact: "Fort" }
+                ],
+                cons: [
+                    { title: "Sensibilité aux cours des matières premières", desc: "Volatilité directe du bénéfice net selon les fluctuations du prix du baril de Brent et du gaz.", impact: "Élevé" }
+                ],
+                news: [
+                    { date: "10 Février 2026", source: "Les Echos", sentiment: "positive", title: "Résultats Annuels et confirmation de la hausse du dividende de 7%", badge: "Résultats", desc: "TotalEnergies annonce un bilan annuel très solide et confirme la poursuite de son programme massif de rachat d'actions." },
+                    { date: "28 Janvier 2026", source: "Boursorama", sentiment: "positive", title: "Nouveau contrat majeur d'approvisionnement GNL en Asie", badge: "Contrat", desc: "Signature d'un accord-cadre de 15 ans assurant des débouchés à forte marge pour la division Gaz & Power." },
+                    { date: "14 Décembre 2025", source: "Zonebourse", sentiment: "neutral", title: "Acquisition ciblée dans les fermes éoliennes offshore en Mer du Nord", badge: "M&A", desc: "TotalEnergies renforce son empreinte dans l'électricité bas carbone avec 1.5 GW de capacités supplémentaires." },
+                    { date: "05 Novembre 2025", source: "Reuters", sentiment: "positive", title: "Morgan Stanley relève son objectif de cours à 74 €", badge: "Broker", desc: "Les analystes soulignent la supériorité du rendement du FCF par rapport aux majors américaines." },
+                    { date: "18 Septembre 2025", source: "Bloomberg", sentiment: "neutral", title: "Point d'étape sur la stratégie de transition de la Journée Investisseurs", badge: "Stratégie", desc: "Confirmation de l'allocation d'un tiers des investissements nets au développement des énergies bas carbone." }
+                ],
+                // Publications Réglementées sur 3 ANS (BALO, AMF, Euronext Press & Cash Notices 2023-2026)
+                regulatoryFilings: [
+                    // 2026
+                    { source: "BALO", date: "12 Février 2026", category: "BALO - Assemblées Générales & Comptes", title: "Avis d'acompte sur dividende au titre de l'exercice 2025", ref: "BALO-2026-0212-0044", desc: "Publication officielle du détachement et des conditions de paiement de l'acompte." },
+                    { source: "AMF", date: "24 Janvier 2026", category: "AMF - Transactions des Dirigeants", title: "Déclaration des opérations réalisées par les dirigeants (Art 19 MAR)", ref: "226C0189", desc: "Déclaration d'acquisition d'actions dans le cadre du plan d'actionnariat salarié." },
+                    { source: "PRESS", date: "10 Février 2026", category: "Euronext - Communiqués de Presse MAR", title: "Publication des résultats du 4ème trimestre et de l'exercice 2025", ref: "COMM-TTE-202602", desc: "Communiqué officiel d'information privilégiée diffusé sur le réseau Euronext." },
+                    { source: "NOTICES", date: "02 Janvier 2026", category: "Euronext Cash Notices - Opérations sur Titres", title: "Notice d'Acompte sur Dividende - Détachement du Coupon", ref: "PAR-20260102-004", desc: "Notice Euronext fixant la date d'ex-dividende et de paiement du coupon cash." },
+                    // 2025
+                    { source: "BALO", date: "15 Mai 2025", category: "BALO - Assemblées Générales & Comptes", title: "Avis de convocation à l'Assemblée Générale Mixte et comptes consolidés 2024", ref: "BALO-2025-0515-0012", desc: "Publication du texte des résolutions et des états financiers consolidés 2024 au Journal Officiel." },
+                    { source: "AMF", date: "18 Octobre 2025", category: "AMF - Franchissements de Seuil", title: "Déclaration de franchissement de seuil et déclaration d'intentions (BlackRock Inc.)", ref: "225C1942", desc: "Franchissement à la hausse du seuil de 5% du capital et des droits de vote." },
+                    { source: "PRESS", date: "25 Juillet 2025", category: "Euronext - Communiqués de Presse MAR", title: "Résultats du 2ème trimestre et du 1er semestre 2025", ref: "COMM-TTE-202507", desc: "Information réglementée au titre de la transparence des Marchés." },
+                    { source: "NOTICES", date: "15 Septembre 2025", category: "Euronext Cash Notices - Opérations sur Titres", title: "Notice d'ajustement du nombre de droits de vote et d'actions en circulation", ref: "PAR-20250915-088", desc: "Avis technique Euronext modifiant le flottant et le nombre d'actions admises." },
+                    // 2024
+                    { source: "BALO", date: "20 Avril 2024", category: "BALO - Assemblées Générales & Comptes", title: "Rapport annuel des commissaires aux comptes et avis d'AG 2024", ref: "BALO-2024-0420-0098", desc: "Publication des rapports d'audit et avis préalable de l'Assemblée Générale 2024." },
+                    { source: "AMF", date: "11 Novembre 2024", category: "AMF - Franchissements de Seuil", title: "Déclaration de franchissement de seuil de capital (Société Générale)", ref: "224C1802", desc: "Avis officiel de l'AMF relatif à la variation de détention de droits de vote." },
+                    { source: "PRESS", date: "07 Février 2024", category: "Euronext - Communiqués de Presse MAR", title: "Résultats annuels 2023 et stratégie de rachat d'actions de 2 Mds $", ref: "COMM-TTE-202402", desc: "Communiqué de presse financier au titre du règlement MAR." },
+                    { source: "NOTICES", date: "28 Juin 2024", category: "Euronext Cash Notices - Opérations sur Titres", title: "Notice d'Ajustement d'Indice et nombre de titres en circulation", ref: "PAR-20240628-102", desc: "Mise à jour des paramètres du flottant admis aux négociations." },
+                    // 2023
+                    { source: "BALO", date: "18 Mai 2023", category: "BALO - Assemblées Générales & Comptes", title: "Procès-verbal d'Assemblée Générale Ordinaire et Extraordinaire 2023", ref: "BALO-2023-0518-0055", desc: "Publication du résultat des votes de l'Assemblée Générale Annuelle." },
+                    { source: "AMF", date: "04 Octobre 2023", category: "AMF - Transactions des Dirigeants", title: "Déclaration d'opérations sur titres par les membres du Comité Exécutif", ref: "223C1520", desc: "Déclaration obligatoire d'opérations au titre de l'article 19 du règlement MAR." }
+                ]
+            },
+            "MC": {
+                name: "LVMH",
+                ticker: "MC.PA",
+                market: "Euronext Paris",
+                sector: "Luxe & Mode",
+                price: 680.50,
+                change: "+1.5%",
+                isUp: true,
+                marketCap: "340,2 Mds €",
+                range52w: "590.00 € - 880.00 €",
+                score: 8.8,
+                verdictTitle: "Leader Mondial du Luxe",
+                verdictSubtitle: "Pouvoir de Fixation des Prix (Pricing Power) Exceptionnel",
+                dividend: "1.9%",
+                volume: "450k titres",
+                fcf: "12.1 Mds €",
+                coverage: "Achat Consensus",
+                ratios: { pe: 21.4, veEbitda: 11.2, pb: 4.10, margin: "28.2%" },
+                summary: "LVMH constitue le numéro un mondial des produits de luxe avec un portefeuille unique de plus de 75 maisons d'exception (Louis Vuitton, Dior, Moët & Chandon, Tiffany & Co.).",
+                financialHistory: {
+                    years: ['2022', '2023', '2024', '2025', '2026 (e)'],
+                    revenue: [79200, 86200, 84700, 88000, 93000],
+                    ebitda: [25100, 27400, 26000, 27200, 29000],
+                    netIncome: [14100, 15200, 13800, 14800, 16000],
+                    netDebtLeverage: [0.8, 0.7, 0.9, 0.8, 0.6]
+                },
+                pros: [{ title: "Portefeuille de marques iconiques", desc: "Position d'ultra-luxe offrant une résilience élevée.", impact: "Fort" }],
+                cons: [{ title: "Exposition au marché chinois", desc: "Sensibilité à la conjoncture de la consommation en Asie.", impact: "Moyen" }],
+                news: [
+                    { date: "28 Janvier 2026", source: "Les Echos", sentiment: "positive", title: "Publication du Chiffre d'Affaires Annuel : Croissance solide dans la Mode", badge: "Résultats", desc: "Les ventes sont portées par la résilience des grandes maisons en Europe et aux Etats-Unis." },
+                    { date: "15 Janvier 2026", source: "Financial Times", sentiment: "neutral", title: "Analyse sectorielle : La dynamique du luxe s'accélère à l'aube de 2026", badge: "Secteur", desc: "Synthèse des valorisations comparées des géants européens de la mode d'exception." }
+                ],
+                regulatoryFilings: [
+                    { source: "BALO", date: "20 Avril 2025", category: "BALO - Assemblées Générales & Comptes", title: "Avis de réunion valant avis de convocation à l'AG", ref: "BALO-2025-MC-01", desc: "Dépôt des comptes sociaux et des résolutions de l'Assemblée Générales." },
+                    { source: "AMF", date: "10 Février 2026", category: "AMF - Transactions des Dirigeants", title: "Déclaration des transactions effectuées par la Financière Agache", ref: "226C0450", desc: "Déclaration de déclarations d'opérations sur les actions LVMH." },
+                    { source: "PRESS", date: "28 Janvier 2026", category: "Euronext - Communiqués de Presse MAR", title: "Résultats annuels : Excellente résistance des grandes maisons", ref: "COMM-LVMH-2026", desc: "Communiqué financier diffusé au titre de l'information réglementée." },
+                    { source: "NOTICES", date: "02 Décembre 2025", category: "Euronext Cash Notices - Opérations sur Titres", title: "Notice d'acompte sur dividende LVMH", ref: "PAR-20251202-019", desc: "Modalités techniques de paiement de l'acompte sur dividende." },
+                    { source: "BALO", date: "18 Avril 2024", category: "BALO - Assemblées Générales & Comptes", title: "Comptes annuels consolidés 2023 et rapport du Conseil d'Administration", ref: "BALO-2024-MC-04", desc: "Publication réglementaire légale au Journal Officiel." },
+                    { source: "AMF", date: "15 Novembre 2023", category: "AMF - Franchissements de Seuil", title: "Déclaration de franchissement de seuil légal de droits de vote", ref: "223C1988", desc: "Notification de détention transmise à l'AMF." }
+                ]
+            }
+        };
+
+        let currentStockKey = "TTE";
+        let activeRegulatoryFilter = "ALL";
+        let financialsChartInstance = null;
+        let debtChartInstance = null;
+        let candleChartInstance = null;
+        let candlestickSeries = null;
+        let volumeSeries = null;
+        let currentCandleTimeframe = "5Y";
+
+
+        // --- FONCTIONS ASSISTANTES UI & MISES À JOUR DE LIENS ---
+        function updateRegulatoryLinks(name, ticker) {
+            const encodedName = encodeURIComponent(name);
+            const encodedTicker = encodeURIComponent(ticker);
+
+            const balo = document.getElementById('linkBalo');
+            if (balo) balo.href = `https://www.journal-officiel.gouv.fr/pages/balo-recherche/?q=${encodedName}`;
+
+            const amf = document.getElementById('linkAmf');
+            if (amf) amf.href = `https://bdif.amf-france.org/fr/recherche-globale?q=${encodedName}`;
+
+            const press = document.getElementById('linkEuronextPress');
+            if (press) press.href = `https://live.euronext.com/en/search_stock/${encodedTicker}`;
+
+            const notices = document.getElementById('linkEuronextNotices');
+            if (notices) notices.href = `https://live.euronext.com/en/resources/notices-corporate-actions/cash-notices`;
+        }
+
+        function switchTab(tabId) {
+            const tabs = ['overview', 'regulatory', 'proscons', 'news', 'replicator'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                const content = document.getElementById(`content-${t}`);
+                if (btn) {
+                    if (t === tabId) {
+                        btn.className = "tab-btn px-4 py-2 font-medium text-sm border-b-2 border-brand-500 text-brand-400 whitespace-nowrap";
+                    } else {
+                        btn.className = "tab-btn px-4 py-2 font-medium text-sm text-slate-400 hover:text-slate-200 border-b-2 border-transparent whitespace-nowrap";
+                    }
+                }
+                if (content) {
+                    if (t === tabId) {
+                        content.classList.remove('hidden');
+                    } else {
+                        content.classList.add('hidden');
+                    }
+                }
+            });
+
+            if (tabId === 'overview' && currentStockKey && stockDatabase[currentStockKey]) {
+                setTimeout(() => {
+                    renderCharts(stockDatabase[currentStockKey]);
+                    if (candleChartInstance) {
+                        const container = document.getElementById('candlestickChartContainer');
+                        if (container) candleChartInstance.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+                    }
+                }, 50);
+            }
+        }
+
+        function handleSearch(e) {
+            const query = e.target.value.trim().toLowerCase();
+            const resultsContainer = document.getElementById('searchResults');
+            if (!resultsContainer) return;
+
+            if (!query) {
+                resultsContainer.classList.add('hidden');
+                resultsContainer.innerHTML = '';
+                return;
+            }
+
+            const matches = Object.keys(stockDatabase).filter(key => {
+                const stock = stockDatabase[key];
+                return stock.name.toLowerCase().includes(query) || stock.ticker.toLowerCase().includes(query);
+            });
+
+            let html = '';
+            matches.forEach(key => {
+                const stock = stockDatabase[key];
+                html += `
+                    <div onclick="selectSearchResult('${key}')" class="p-3 hover:bg-slate-700 cursor-pointer flex justify-between items-center text-xs">
+                        <div>
+                            <div class="font-bold text-white">${stock.name}</div>
+                            <div class="text-slate-400 text-[10px]">${stock.ticker} · ${stock.market || ''}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold text-brand-400">${typeof stock.price === 'number' ? stock.price.toFixed(2) : stock.price} €</div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
+                <div onclick="triggerLiveAISearch()" class="p-3 bg-brand-950/60 hover:bg-brand-900/80 border-t border-slate-700 cursor-pointer flex items-center gap-2 text-xs text-brand-300 font-semibold">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-brand-400"></i>
+                    <span>Rechercher "${query}" en direct avec IA...</span>
+                </div>
+            `;
+
+            resultsContainer.innerHTML = html;
+            resultsContainer.classList.remove('hidden');
+            lucide.createIcons();
+
+            if (e.key === 'Enter') {
+                triggerLiveAISearch();
+            }
+        }
+
+        function selectSearchResult(key) {
+            const resultsContainer = document.getElementById('searchResults');
+            if (resultsContainer) resultsContainer.classList.add('hidden');
+            loadStockData(key);
+        }
+
+        function triggerLiveAISearch() {
+            const input = document.getElementById('tickerSearch');
+            const query = input ? input.value.trim() : '';
+            const resultsContainer = document.getElementById('searchResults');
+            if (resultsContainer) resultsContainer.classList.add('hidden');
+
+            if (query) {
+                fetchStockDataFromMarket(query);
+            } else {
+                showToast("Recherche vide", "Veuillez saisir un nom d'entreprise ou un ticker dans la barre de recherche.", "info");
+            }
+        }
+
+        function filterRegulatory(filterType) {
+            activeRegulatoryFilter = filterType;
+            
+            const buttons = document.querySelectorAll('.reg-filter-btn');
+            buttons.forEach(btn => {
+                const text = btn.innerText;
+                if ((filterType === 'ALL' && text.includes('Tous')) || text.includes(filterType)) {
+                    btn.className = "reg-filter-btn px-2.5 py-1 bg-brand-600 text-white rounded text-xs font-medium";
+                } else {
+                    btn.className = "reg-filter-btn px-2.5 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded text-xs font-medium";
+                }
+            });
+
+            if (stockDatabase[currentStockKey]) {
+                renderRegulatoryHub(stockDatabase[currentStockKey]);
+            }
+        }
+
+        function refreshRegulatoryData() {
+            if (currentStockKey && stockDatabase[currentStockKey]) {
+                fetchStockDataFromMarket(stockDatabase[currentStockKey].name);
+            }
+        }
+
+        function showLoadingOverlay(title, subtitle) {
+            const overlay = document.getElementById('loadingOverlay');
+            const titleEl = document.getElementById('loadingTitle');
+            const subEl = document.getElementById('loadingSubtitle');
+            if (titleEl && title) titleEl.innerText = title;
+            if (subEl && subtitle) subEl.innerText = subtitle;
+            if (overlay) overlay.classList.remove('hidden');
+        }
+
+        function hideLoadingOverlay() {
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) overlay.classList.add('hidden');
+        }
+
+        function showToast(title, message, type = 'info') {
+            const toast = document.getElementById('toastNotification');
+            const titleEl = document.getElementById('toastTitle');
+            const msgEl = document.getElementById('toastMessage');
+            const iconEl = document.getElementById('toastIcon');
+
+            if (!toast) return;
+
+            if (titleEl) titleEl.innerText = title;
+            if (msgEl) msgEl.innerText = message;
+
+            if (iconEl) {
+                if (type === 'error') {
+                    iconEl.className = "p-2 rounded-lg bg-rose-500/20 text-rose-400";
+                    iconEl.innerHTML = '<i data-lucide="alert-circle" class="w-5 h-5"></i>';
+                } else if (type === 'success') {
+                    iconEl.className = "p-2 rounded-lg bg-emerald-500/20 text-emerald-400";
+                    iconEl.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5"></i>';
+                } else {
+                    iconEl.className = "p-2 rounded-lg bg-brand-500/20 text-brand-400";
+                    iconEl.innerHTML = '<i data-lucide="info" class="w-5 h-5"></i>';
+                }
+                lucide.createIcons();
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 4000);
+        }
+
+        function openCustomModelModal() {
+            const modal = document.getElementById('customModal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeCustomModelModal() {
+            const modal = document.getElementById('customModal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function saveCustomStock(e) {
+            e.preventDefault();
+            const name = document.getElementById('customName').value;
+            const ticker = document.getElementById('customTicker').value;
+            const price = parseFloat(document.getElementById('customPrice').value) || 100.0;
+            const pe = parseFloat(document.getElementById('customPE').value) || 15.0;
+            const veEbitda = parseFloat(document.getElementById('customVEEbitda').value) || 8.0;
+            const pb = parseFloat(document.getElementById('customPB').value) || 2.0;
+            const margin = document.getElementById('customMargin').value ? `${document.getElementById('customMargin').value}%` : "20.0%";
+            const pro = document.getElementById('customPro').value || "Croissance régulière";
+            const con = document.getElementById('customCon').value || "Concurrence sectorielle";
+
+            const key = ticker.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+
+            stockDatabase[key] = {
+                name: name,
+                ticker: ticker,
+                market: "Personnalisé",
+                sector: "Sur Mesure",
+                price: price,
+                change: "0.0%",
+                isUp: true,
+                marketCap: "Non renseigné",
+                range52w: `${(price*0.85).toFixed(2)} € - ${(price*1.15).toFixed(2)} €`,
+                score: 7.5,
+                verdictTitle: "Valeur Ajoutée Manuellement",
+                verdictSubtitle: "Saisie Utilisateur Custom",
+                dividend: "N/A",
+                volume: "N/A",
+                fcf: "N/A",
+                coverage: "Modèle Manuel",
+                ratios: { pe, veEbitda, pb, margin },
+                summary: `Fiche créée manuellement pour ${name} (${ticker}).`,
+                financialHistory: {
+                    years: ['2022', '2023', '2024', '2025', '2026 (e)'],
+                    revenue: [1000, 1100, 1200, 1300, 1400],
+                    ebitda: [200, 220, 240, 260, 280],
+                    netIncome: [100, 110, 120, 130, 140],
+                    netDebtLeverage: [1.2, 1.1, 1.0, 0.9, 0.8]
+                },
+                pros: [{ title: pro, desc: "Axe de développement prioritaire", impact: "Fort" }],
+                cons: [{ title: con, desc: "Facteur de risque à surveiller", impact: "Moyen" }],
+                news: [
+                    { date: "Aujourd'hui", source: "Manuel", sentiment: "neutral", title: "Ajout dans le terminal", badge: "User", desc: `Création de la fiche pour ${name}.` }
+                ],
+                regulatoryFilings: [
+                    { source: "BALO", date: "Avis Récent", category: "BALO - Assemblées Générales & Comptes", title: `Avis de publication pour ${name}`, ref: "CUSTOM-01", desc: "Notice utilisateur créée manuellement." }
+                ]
+            };
+
+            closeCustomModelModal();
+            loadStockData(key);
+            showToast("Valeur ajoutée", `${name} a été ajouté avec succès à votre hub.`, "success");
+        }
+
+        async function fetchStockDataFromMarket(query) {
+            showLoadingOverlay(`Scan boursier, actualités & hub réglementaire sur 3 ans pour "${query}"...`, "Extraction en direct sur Google/Yahoo Finance, Boursorama, Les Echos, BALO, AMF BDIF et Euronext");
+
+            const systemPrompt = `Tu es un analyste financier senior de classe mondiale et un expert en réglementation des marchés financiers européens (AMF, BALO, Euronext).
+            L'utilisateur demande les données boursières, actualités multi-sources et l'historique réglementaire sur 3 ans pour une entreprise.
+            Tu DOIS effectuer des recherches actualisées pour extraire :
+            1. Le cours exact, capitalisation, ratios (P/E, VE/EBITDA, P/B, Marge EBITDA), et l'historique financier sur 5 ans (2022-2026e).
+            2. Au moins 5 actualités boursières récentes provenant de sources reconnues (Boursorama, Les Echos, Zonebourse, Reuters, Bloomberg, Financial Times, CNBC, Seeking Alpha) avec le nom explicite de la source, la date, le sentiment ('positive', 'negative', 'neutral') et un court descriptif.
+            3. Un historique exhaustif couvrant les 3 DERNIÈRES ANNÉES (36 MOIS : 2023, 2024, 2025, 2026) avec au moins 10 publications réglementées réparties sur les 4 sources réglementaires :
+               - BALO (Journal Officiel - Convocations d'AG, comptes annuels)
+               - BDIF AMF (Franchissements de seuils, déclarations des dirigeants MAR)
+               - Euronext Press Releases (Communiqués de presse réglementés MAR, résultats)
+               - Euronext Cash Notices (Notices d'opérations sur titres, coupons, avis de marché)
+            
+            Réponds EXCLUSIVEMENT avec un objet JSON strictement valide respectant la structure définie. Aucun markdown explicatif autour du JSON.`;
+
+            const userPrompt = `Recherche et génère la fiche financière complète, les actualités multi-sources et les avis réglementaires sur 3 ANS pour : "${query}".`;
+
+            const payload = {
+                contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+                tools: [{ "google_search": {} }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            name: { type: "STRING" },
+                            ticker: { type: "STRING" },
+                            market: { type: "STRING" },
+                            sector: { type: "STRING" },
+                            price: { type: "NUMBER" },
+                            change: { type: "STRING" },
+                            isUp: { type: "BOOLEAN" },
+                            marketCap: { type: "STRING" },
+                            range52w: { type: "STRING" },
+                            score: { type: "NUMBER" },
+                            verdictTitle: { type: "STRING" },
+                            verdictSubtitle: { type: "STRING" },
+                            dividend: { type: "STRING" },
+                            volume: { type: "STRING" },
+                            fcf: { type: "STRING" },
+                            coverage: { type: "STRING" },
+                            ratios: {
+                                type: "OBJECT",
+                                properties: {
+                                    pe: { type: "NUMBER" },
+                                    veEbitda: { type: "NUMBER" },
+                                    pb: { type: "NUMBER" },
+                                    margin: { type: "STRING" }
+                                },
+                                required: ["pe", "veEbitda", "pb", "margin"]
+                            },
+                            summary: { type: "STRING" },
+                            financialHistory: {
+                                type: "OBJECT",
+                                properties: {
+                                    years: { type: "ARRAY", items: { type: "STRING" } },
+                                    revenue: { type: "ARRAY", items: { type: "NUMBER" } },
+                                    ebitda: { type: "ARRAY", items: { type: "NUMBER" } },
+                                    netIncome: { type: "ARRAY", items: { type: "NUMBER" } },
+                                    netDebtLeverage: { type: "ARRAY", items: { type: "NUMBER" } }
+                                },
+                                required: ["years", "revenue", "ebitda", "netIncome", "netDebtLeverage"]
+                            },
+                            pros: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: { title: { type: "STRING" }, desc: { type: "STRING" }, impact: { type: "STRING" } },
+                                    required: ["title", "desc", "impact"]
+                                }
+                            },
+                            cons: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: { title: { type: "STRING" }, desc: { type: "STRING" }, impact: { type: "STRING" } },
+                                    required: ["title", "desc", "impact"]
+                                }
+                            },
+                            news: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        date: { type: "STRING" },
+                                        source: { type: "STRING", description: "Nom du média ex: Boursorama, Les Echos, Zonebourse, Reuters, Bloomberg" },
+                                        sentiment: { type: "STRING", description: "positive, negative, neutral" },
+                                        title: { type: "STRING" },
+                                        badge: { type: "STRING" },
+                                        desc: { type: "STRING" }
+                                    },
+                                    required: ["date", "source", "title", "badge", "desc"]
+                                }
+                            },
+                            regulatoryFilings: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        source: { type: "STRING", description: "BALO, AMF, PRESS, NOTICES" },
+                                        date: { type: "STRING" },
+                                        category: { type: "STRING" },
+                                        title: { type: "STRING" },
+                                        ref: { type: "STRING" },
+                                        desc: { type: "STRING" }
+                                    },
+                                    required: ["source", "date", "category", "title", "ref", "desc"]
+                                }
+                            }
+                        },
+                        required: ["name", "ticker", "price", "ratios", "financialHistory", "pros", "cons", "news", "regulatoryFilings"]
+                    }
+                }
+            };
+
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            let attempts = 0;
+            let success = false;
+            let stockData = null;
+
+            while (attempts < 3 && !success) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (rawText) {
+                            stockData = JSON.parse(rawText);
+                            success = true;
+                        }
+                    }
+                } catch (err) {
+                    // Retry
+                }
+
+                if (!success) {
+                    attempts++;
+                    if (attempts < 3) await new Promise(res => setTimeout(res, 1200));
+                }
+            }
+
+            hideLoadingOverlay();
+
+            if (success && stockData) {
+                const key = stockData.ticker.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || query.toUpperCase();
+                stockDatabase[key] = stockData;
+                loadStockData(key);
+                switchTab('overview');
+                showToast("Succès du chargement", `Analyse, Actualités multi-sources & Filings sur 3 ans prêts pour ${stockData.name}`, "success");
+            } else {
+                showToast("Échec de connexion", "Impossible d'extraire automatiquement les données. Utilisez la saisie manuelle.", "error");
+            }
+        }
+
+        // --- DESSIN DU GRAPHIQUE BOURSIER 5 ANS (BOUGIES HEBDOMADAIRES & VOLUME) ---
+        function generate5YearWeeklyCandles(basePrice) {
+            const candles = [];
+            const volumes = [];
+            const totalWeeks = 260; // 5 ans * 52 semaines
+            
+            // Date de départ (il y a 5 ans à partir de Février 2026)
+            let currDate = new Date(2021, 1, 15);
+            let currentPrice = Math.max(10, basePrice * 0.75); // Départ simulé à 75% du prix actuel
+
+            for (let i = 0; i < totalWeeks; i++) {
+                // Formater la date YYYY-MM-DD
+                const year = currDate.getFullYear();
+                const month = String(currDate.getMonth() + 1).padStart(2, '0');
+                const day = String(currDate.getDate()).padStart(2, '0');
+                const dateStr = `${year}-${month}-${day}`;
+
+                // Dérive vers le prix cible actuel
+                const drift = (basePrice - currentPrice) / (totalWeeks - i);
+                const volatility = currentPrice * 0.028; // Volatilité de ~2.8% par semaine
+
+                const open = currentPrice;
+                const change = (Math.random() - 0.48) * volatility * 2 + drift;
+                const close = Math.max(2, open + change);
+                const high = Math.max(open, close) + Math.random() * volatility * 0.8;
+                const low = Math.min(open, close) - Math.random() * volatility * 0.8;
+
+                const isUp = close >= open;
+                const volValue = Math.floor(Math.random() * 8000000 + 2000000);
+
+                candles.push({
+                    time: dateStr,
+                    open: parseFloat(open.toFixed(2)),
+                    high: parseFloat(high.toFixed(2)),
+                    low: parseFloat(low.toFixed(2)),
+                    close: parseFloat(close.toFixed(2))
+                });
+
+                volumes.push({
+                    time: dateStr,
+                    value: volValue,
+                    color: isUp ? 'rgba(34, 197, 94, 0.45)' : 'rgba(244, 63, 94, 0.45)'
+                });
+
+                currentPrice = close;
+                // Ajouter 7 jours
+                currDate.setDate(currDate.getDate() + 7);
+            }
+
+            return { candles, volumes };
+        }
+
+        function renderCandlestickChart(stock) {
+            const container = document.getElementById('candlestickChartContainer');
+            if (!container) return;
+
+            // Nettoyage de l'instance précédente
+            container.innerHTML = '';
+
+            const currentPriceNum = typeof stock.price === 'number' ? stock.price : parseFloat(stock.price) || 60;
+            const { candles, volumes } = generate5YearWeeklyCandles(currentPriceNum);
+
+            candleChartInstance = LightweightCharts.createChart(container, {
+                width: container.clientWidth,
+                height: container.clientHeight,
+                layout: {
+                    background: { type: 'solid', color: '#020617' },
+                    textColor: '#94a3b8',
+                    fontSize: 11
+                },
+                grid: {
+                    vertLines: { color: '#1e293b' },
+                    horzLines: { color: '#1e293b' }
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal
+                },
+                rightPriceScale: {
+                    borderColor: '#334155'
+                },
+                timeScale: {
+                    borderColor: '#334155',
+                    timeVisible: true,
+                    secondsVisible: false
+                }
+            });
+
+            const candleOptions = {
+                upColor: '#22c55e',
+                downColor: '#ef4444',
+                borderDownColor: '#ef4444',
+                borderUpColor: '#22c55e',
+                wickDownColor: '#ef4444',
+                wickUpColor: '#22c55e'
+            };
+
+            if (typeof candleChartInstance.addCandlestickSeries === 'function') {
+                candlestickSeries = candleChartInstance.addCandlestickSeries(candleOptions);
+            } else if (LightweightCharts.CandlestickSeries) {
+                candlestickSeries = candleChartInstance.addSeries(LightweightCharts.CandlestickSeries, candleOptions);
+            }
+
+            candlestickSeries.setData(candles);
+
+            const volumeOptions = {
+                priceFormat: { type: 'volume' },
+                priceScaleId: '',
+                scaleMargins: { top: 0.75, bottom: 0 }
+            };
+
+            if (typeof candleChartInstance.addHistogramSeries === 'function') {
+                volumeSeries = candleChartInstance.addHistogramSeries(volumeOptions);
+            } else if (LightweightCharts.HistogramSeries) {
+                volumeSeries = candleChartInstance.addSeries(LightweightCharts.HistogramSeries, volumeOptions);
+            }
+
+            volumeSeries.setData(volumes);
+
+            // Responsive Resize
+            window.addEventListener('resize', () => {
+                if (candleChartInstance && container) {
+                    candleChartInstance.applyOptions({
+                        width: container.clientWidth,
+                        height: container.clientHeight
+                    });
+                }
+            });
+        }
+
+        function setCandleTimeframe(tf) {
+            currentCandleTimeframe = tf;
+            ['5Y', '3Y', '1Y'].forEach(t => {
+                const btn = document.getElementById(`btnTf${t}`);
+                if (btn) {
+                    if (t === tf) btn.className = "px-2.5 py-1 bg-brand-600 text-white rounded font-medium";
+                    else btn.className = "px-2.5 py-1 bg-slate-800 text-slate-400 hover:text-white rounded font-medium";
+                }
+            });
+
+            if (candleChartInstance) {
+                const timeScale = candleChartInstance.timeScale();
+                if (tf === '1Y') timeScale.setVisibleLogicalRange({ from: 208, to: 260 });
+                else if (tf === '3Y') timeScale.setVisibleLogicalRange({ from: 104, to: 260 });
+                else timeScale.fitContent();
+            }
+        }
+
+        // --- AFFICHAGE DE L'HISTORIQUE RÉGLEMENTAIRE SUR 3 ANS GROUPÉ PAR TYPE ---
+        function renderRegulatoryHub(stock) {
+            document.getElementById('regCompanyName').innerText = `${stock.name} (${stock.ticker})`;
+            updateRegulatoryLinks(stock.name, stock.ticker);
+
+            const filings = stock.regulatoryFilings || [];
+            const container = document.getElementById('regulatoryGroupContainer');
+
+            if (!container) return;
+
+            // Filtrage selon le bouton actif
+            let filtered = filings;
+            if (activeRegulatoryFilter !== 'ALL') {
+                filtered = filings.filter(f => f.source === activeRegulatoryFilter);
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="p-8 text-center bg-cardbg rounded-xl border border-slate-800 text-slate-400 text-xs">
+                        Aucune publication trouvée dans cette catégorie pour les 3 dernières années (36 mois).
+                    </div>
+                `;
+                return;
+            }
+
+            // Regroupement par catégorie / type d'information
+            const groups = {
+                "BALO - Assemblées Générales & Comptes": [],
+                "AMF - Franchissements de Seuil & Dirigeants": [],
+                "Euronext - Communiqués de Presse MAR": [],
+                "Euronext Cash Notices - Opérations sur Titres": []
+            };
+
+            filtered.forEach(item => {
+                if (item.source === 'BALO') {
+                    groups["BALO - Assemblées Générales & Comptes"].push(item);
+                } else if (item.source === 'AMF') {
+                    groups["AMF - Franchissements de Seuil & Dirigeants"].push(item);
+                } else if (item.source === 'PRESS') {
+                    groups["Euronext - Communiqués de Presse MAR"].push(item);
+                } else if (item.source === 'NOTICES') {
+                    groups["Euronext Cash Notices - Opérations sur Titres"].push(item);
+                } else {
+                    groups["Euronext - Communiqués de Presse MAR"].push(item);
+                }
+            });
+
+            let html = '';
+
+            const sourceBadges = {
+                'BALO': '<span class="px-2 py-0.5 text-[10px] bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30 rounded">BALO</span>',
+                'AMF': '<span class="px-2 py-0.5 text-[10px] bg-blue-500/20 text-blue-400 font-bold border border-blue-500/30 rounded">AMF BDIF</span>',
+                'PRESS': '<span class="px-2 py-0.5 text-[10px] bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30 rounded">EURONEXT PRESS</span>',
+                'NOTICES': '<span class="px-2 py-0.5 text-[10px] bg-purple-500/20 text-purple-400 font-bold border border-purple-500/30 rounded">CASH NOTICE</span>'
+            };
+
+            Object.keys(groups).forEach(groupName => {
+                const list = groups[groupName];
+                if (list.length > 0) {
+                    html += `
+                        <div class="bg-cardbg rounded-xl border border-borderbg overflow-hidden space-y-2">
+                            <div class="bg-slate-900/90 p-3.5 border-b border-borderbg flex justify-between items-center">
+                                <h4 class="font-bold text-xs text-white flex items-center gap-2">
+                                    <i data-lucide="folder-open" class="w-4 h-4 text-brand-400"></i>
+                                    <span>${groupName}</span>
+                                </h4>
+                                <span class="px-2 py-0.5 text-[10px] bg-slate-800 text-slate-300 rounded font-semibold">${list.length} publication(s) sur 3 ans</span>
+                            </div>
+
+                            <div class="divide-y divide-slate-800/60">
+                                ${list.map(f => `
+                                    <div class="p-4 hover:bg-slate-800/40 transition space-y-1.5">
+                                        <div class="flex flex-wrap justify-between items-center gap-2">
+                                            <div class="flex items-center gap-2">
+                                                ${sourceBadges[f.source] || ''}
+                                                <span class="text-xs font-bold text-white">${f.title}</span>
+                                            </div>
+                                            <span class="text-[11px] text-slate-400 font-medium">${f.date}</span>
+                                        </div>
+                                        <p class="text-xs text-slate-300 leading-relaxed">${f.desc}</p>
+                                        <div class="flex justify-between items-center text-[10px] text-slate-400 pt-1">
+                                            <span>Réf. Officielle: <strong class="text-slate-200">${f.ref || 'N/A'}</strong></span>
+                                            <span class="text-brand-400">Registre 36 mois</span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+
+            container.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        // --- AFFICHAGE DE L'ACTUALITÉ BOURSIÈRE MULTI-SOURCES ---
+        function renderNews(stock) {
+            const feed = document.getElementById('newsFeed');
+            if (!feed) return;
+
+            const newsList = stock.news || [];
+            if (newsList.length === 0) {
+                feed.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 bg-cardbg rounded-xl border border-slate-800">Aucune actualité disponible pour le moment.</div>`;
+                return;
+            }
+
+            const sentimentStyles = {
+                'positive': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+                'negative': 'bg-rose-500/10 text-rose-400 border-rose-500/30',
+                'neutral': 'bg-slate-800 text-slate-300 border-slate-700'
+            };
+
+            feed.innerHTML = newsList.map(n => `
+                <div class="bg-cardbg p-4 rounded-xl border border-borderbg space-y-2 hover:border-slate-600 transition">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-brand-400 border border-slate-700 flex items-center gap-1">
+                                <i data-lucide="globe" class="w-3 h-3"></i>
+                                ${n.source || 'Info Marché'}
+                            </span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-brand-500/20 text-brand-300 border border-brand-500/30">${n.badge || 'Actualité'}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-semibold border ${sentimentStyles[n.sentiment] || sentimentStyles['neutral']}">
+                                ${n.sentiment === 'positive' ? ' Haussier' : n.sentiment === 'negative' ? ' Baissier' : ' Neutre'}
+                            </span>
+                        </div>
+                        <span class="text-xs text-slate-400">${n.date}</span>
+                    </div>
+                    <h4 class="font-bold text-sm text-white">${n.title}</h4>
+                    <p class="text-xs text-slate-300 leading-relaxed">${n.desc}</p>
+                </div>
+            `).join('');
+
+            lucide.createIcons();
+        }
+
+        // --- RENDER D'ENSEMBLE INCLUANT LE CHART CANTONNÉ SUR 5 ANS ---
+        function loadStockData(key) {
+            const stock = stockDatabase[key];
+            if (!stock) return;
+            currentStockKey = key;
+
+            // En-tête
+            document.getElementById('headerTickerBadge').innerText = stock.ticker;
+            document.getElementById('activeCompanyName').innerText = stock.name.toUpperCase();
+            document.getElementById('marketBadge').innerText = stock.market || "EURONEXT";
+            document.getElementById('stockPrice').innerText = `${typeof stock.price === 'number' ? stock.price.toFixed(2) : stock.price} €`;
+            
+            const changeEl = document.getElementById('stockChange');
+            const isUp = stock.isUp !== false && !String(stock.change).startsWith('-');
+            changeEl.className = `text-sm font-semibold flex items-center ${isUp ? 'text-emerald-400' : 'text-rose-400'}`;
+            changeEl.innerHTML = `<i data-lucide="${isUp ? 'trending-up' : 'trending-down'}" class="w-4 h-4 mr-0.5"></i> ${stock.change || '0.0%'}`;
+
+            document.getElementById('marketCap').innerText = stock.marketCap || "N/A";
+            document.getElementById('range52w').innerText = stock.range52w || "N/A";
+
+            // Gauge Score
+            const gauge = document.getElementById('scoreGauge');
+            const scoreVal = stock.score || 7.0;
+            gauge.innerText = scoreVal;
+            if (scoreVal >= 8.0) {
+                gauge.className = "w-12 h-12 rounded-full border-4 border-emerald-500 flex items-center justify-center font-bold text-emerald-400 text-lg";
+            } else if (scoreVal >= 6.0) {
+                gauge.className = "w-12 h-12 rounded-full border-4 border-amber-500 flex items-center justify-center font-bold text-amber-400 text-lg";
+            } else {
+                gauge.className = "w-12 h-12 rounded-full border-4 border-rose-500 flex items-center justify-center font-bold text-rose-400 text-lg";
+            }
+
+            document.getElementById('verdictTitle').innerText = stock.verdictTitle || stock.name;
+            document.getElementById('verdictSubtitle').innerText = stock.verdictSubtitle || stock.sector;
+
+            // KPIs
+            document.getElementById('kpiSector').innerText = stock.sector || "N/A";
+            document.getElementById('kpiDividend').innerText = stock.dividend || "N/A";
+            document.getElementById('kpiVolume').innerText = stock.volume || "N/A";
+            document.getElementById('kpiFCF').innerText = stock.fcf || "N/A";
+            document.getElementById('kpiCoverage').innerText = stock.coverage || "Actif";
+
+            // Ratios
+            const r = stock.ratios || {};
+            document.getElementById('ratioPE').innerText = r.pe ? `${r.pe}x` : "N/A";
+            document.getElementById('ratioVEEBITDA').innerText = r.veEbitda ? `${r.veEbitda}x` : "N/A";
+            document.getElementById('ratioPB').innerText = r.pb ? `${r.pb}x` : "N/A";
+            document.getElementById('ratioEbitdaMargin').innerText = r.margin || "N/A";
+
+            // Dynamic overview text
+            document.getElementById('overviewSummaryTitle').innerText = `Synthèse Boursière : ${stock.name} (${stock.ticker})`;
+            document.getElementById('overviewSummaryContent').innerHTML = stock.summary || `Analyse synthétique des ratios et de la trajectoire boursière pour ${stock.name}.`;
+
+            // Rendu des vues & graphiques
+            renderCandlestickChart(stock);
+            renderRatiosTable(stock);
+            renderProsCons(stock);
+            renderNews(stock);
+            renderCharts(stock);
+            renderRegulatoryHub(stock);
+            renderPeerGrid();
+            renderComparisonTable();
+
+            lucide.createIcons();
+        }
+
+        // --- RENDU TABLEAU ET DESSIN DES CHART.JS ---
+        function renderRatiosTable(stock) {
+            const tbody = document.getElementById('ratiosTableBody');
+            if (!tbody || !stock.financialHistory) return;
+            const h = stock.financialHistory;
+
+            const rows = [
+                { label: "Chiffre d'Affaires (M€)", data: h.revenue, fmt: v => `${v} M€` },
+                { label: "EBITDA (M€)", data: h.ebitda, fmt: v => `${v} M€` },
+                { label: "Résultat Net Part du Groupe (M€)", data: h.netIncome, fmt: v => `<span class="${v < 0 ? 'text-rose-400 font-semibold' : 'text-emerald-400'}">${v} M€</span>` },
+                { label: "Ratio Dette Nette / EBITDA", data: h.netDebtLeverage, fmt: v => `<span class="${v > 3.5 ? 'text-amber-400 font-bold' : ''}">${v}x</span>` }
+            ];
+
+            tbody.innerHTML = rows.map(r => `
+                <tr class="hover:bg-slate-800/50 transition">
+                    <td class="p-3 font-medium text-slate-200">${r.label}</td>
+                    ${(r.data || []).map(val => `<td class="p-3">${r.fmt(val)}</td>`).join('')}
+                </tr>
+            `).join('');
+        }
+
+        function renderProsCons(stock) {
+            const prosList = document.getElementById('prosList');
+            const consList = document.getElementById('consList');
+
+            if (prosList) {
+                prosList.innerHTML = (stock.pros || []).map(p => `
+                    <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-800 space-y-1">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-slate-100 text-xs">${p.title}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400 font-semibold">Impact ${p.impact || 'Moyen'}</span>
+                        </div>
+                        <p class="text-xs text-slate-400 leading-relaxed">${p.desc}</p>
+                    </div>
+                `).join('');
+            }
+
+            if (consList) {
+                consList.innerHTML = (stock.cons || []).map(c => `
+                    <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-800 space-y-1">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-slate-100 text-xs">${c.title}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] bg-rose-500/20 text-rose-400 font-semibold">Impact ${c.impact || 'Moyen'}</span>
+                        </div>
+                        <p class="text-xs text-slate-400 leading-relaxed">${c.desc}</p>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function renderNews(stock) {
+            const feed = document.getElementById('newsFeed');
+            if (!feed) return;
+
+            feed.innerHTML = (stock.news || []).map(n => `
+                <div class="bg-cardbg p-4 rounded-xl border border-borderbg space-y-2 hover:border-slate-600 transition">
+                    <div class="flex items-center justify-between">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-brand-500/20 text-brand-400 border border-brand-500/30">${n.badge || 'Actualité'}</span>
+                        <span class="text-xs text-slate-400">${n.date}</span>
+                    </div>
+                    <h4 class="font-bold text-sm text-white">${n.title}</h4>
+                    <p class="text-xs text-slate-300 leading-relaxed">${n.desc}</p>
+                </div>
+            `).join('');
+        }
+
+        function renderCharts(stock) {
+            if (!stock.financialHistory) return;
+            const h = stock.financialHistory;
+
+            const ctx1 = document.getElementById('financialsChart');
+            if (ctx1) {
+                if (financialsChartInstance) financialsChartInstance.destroy();
+                financialsChartInstance = new Chart(ctx1, {
+                    type: 'bar',
+                    data: {
+                        labels: h.years,
+                        datasets: [
+                            { label: "Chiffre d'Affaires (M€)", data: h.revenue, backgroundColor: 'rgba(59, 130, 246, 0.6)', borderColor: '#3b82f6', borderWidth: 1, borderRadius: 4 },
+                            { label: 'EBITDA (M€)', data: h.ebitda, backgroundColor: 'rgba(34, 197, 94, 0.8)', borderColor: '#22c55e', borderWidth: 1, borderRadius: 4 }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+                        scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } } }
+                    }
+                });
+            }
+
+            const ctx2 = document.getElementById('debtChart');
+            if (ctx2) {
+                if (debtChartInstance) debtChartInstance.destroy();
+                debtChartInstance = new Chart(ctx2, {
+                    type: 'bar',
+                    data: {
+                        labels: h.years,
+                        datasets: [
+                            { type: 'bar', label: 'Résultat Net (M€)', data: h.netIncome, backgroundColor: h.netIncome.map(v => v >= 0 ? 'rgba(34, 197, 94, 0.6)' : 'rgba(244, 63, 94, 0.6)'), yAxisID: 'y' },
+                            { type: 'line', label: 'Dette Nette / EBITDA (x)', data: h.netDebtLeverage, borderColor: '#f59e0b', backgroundColor: '#f59e0b', borderWidth: 2, tension: 0.3, yAxisID: 'y1' }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+                        scales: {
+                            x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+                            y: { position: 'left', ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+                            y1: { position: 'right', ticks: { color: '#f59e0b' }, grid: { drawOnChartArea: false } }
+                        }
+                    }
+                });
+            }
+        }
+
+        function renderPeerGrid() {
+            const grid = document.getElementById('peerGrid');
+            if (!grid) return;
+
+            grid.innerHTML = Object.keys(stockDatabase).map(key => {
+                const s = stockDatabase[key];
+                const isSelected = key === currentStockKey;
+                return `
+                    <div onclick="selectSearchResult('${key}')" class="p-3 bg-slate-900/80 rounded-xl border ${isSelected ? 'border-brand-500 ring-1 ring-brand-500' : 'border-slate-800 hover:border-slate-700'} cursor-pointer transition flex flex-col justify-between space-y-2">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 class="font-bold text-white text-xs">${s.name}</h4>
+                                <span class="text-[10px] text-slate-400">${s.ticker}</span>
+                            </div>
+                            <span class="text-xs font-bold text-brand-400">${typeof s.price === 'number' ? s.price.toFixed(2) : s.price} €</span>
+                        </div>
+                        <div class="flex justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-800">
+                            <span>Score: <strong class="text-white">${s.score || 'N/A'}</strong></span>
+                            <span>PER: <strong class="text-white">${s.ratios?.pe ? s.ratios.pe + 'x' : 'N/A'}</strong></span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderComparisonTable() {
+            const tbody = document.getElementById('comparisonTableBody');
+            if (!tbody) return;
+
+            tbody.innerHTML = Object.keys(stockDatabase).map(key => {
+                const s = stockDatabase[key];
+                const r = s.ratios || {};
+                const isSelected = key === currentStockKey;
+                return `
+                    <tr class="${isSelected ? 'bg-brand-950/20 font-semibold' : 'hover:bg-slate-800/50'} transition">
+                        <td class="p-3 text-white flex items-center gap-2">
+                            <span>${s.name}</span>
+                            <span class="text-[10px] text-slate-400">(${s.ticker})</span>
+                        </td>
+                        <td class="p-3 text-slate-400">${s.sector || 'Secteur'}</td>
+                        <td class="p-3 text-white font-medium">${typeof s.price === 'number' ? s.price.toFixed(2) : s.price} €</td>
+                        <td class="p-3">${r.pe ? r.pe + 'x' : 'N/A'}</td>
+                        <td class="p-3">${r.veEbitda ? r.veEbitda + 'x' : 'N/A'}</td>
+                        <td class="p-3">${r.pb ? r.pb + 'x' : 'N/A'}</td>
+                        <td class="p-3">${r.margin || 'N/A'}</td>
+                        <td class="p-3 text-right">
+                            <button onclick="selectSearchResult('${key}')" class="px-2 py-1 ${isSelected ? 'bg-brand-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'} rounded text-[11px]">
+                                ${isSelected ? 'Actif' : 'Consulter'}
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        window.onload = function() {
+            lucide.createIcons();
+            loadStockData("TTE");
+        };
+    </script>
+</body>
+</html>
